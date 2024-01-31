@@ -1,0 +1,1 @@
+CREATE INDEX path_index ON page (path(255))
