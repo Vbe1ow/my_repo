@@ -10,7 +10,7 @@ import javax.persistence.*;
 @Getter
 @Setter
 @Entity
-@Table(name = "index")
+@Table(name = "index_tab")
 public class Index {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,6 +22,6 @@ public class Index {
     @ManyToOne
     @JoinColumn(name = "lemma_id", nullable = false)
     private Lemma lemmaId;
-    @Column(name = "rank", nullable = false)
-    private Float rank;
+    @Column(name = "rank_lem", nullable = false)
+    private float rank;
 }
