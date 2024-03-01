@@ -7,6 +7,7 @@ import searchengine.model.SiteIndex;
 @Repository
 public interface SiteRepository extends JpaRepository<SiteIndex, Long> {
     SiteIndex findByUrl(String url);
+    SiteIndex findById(Integer id);
     boolean existsByUrl(String url);
 
 }

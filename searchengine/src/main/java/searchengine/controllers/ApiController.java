@@ -4,11 +4,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import searchengine.dto.searching.ResponseResults;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.services.IndexingService;
+import searchengine.services.SearchingService;
 import searchengine.services.StatisticsService;
 
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -17,12 +21,14 @@ public class ApiController {
 
     private final StatisticsService statisticsService;
     private final IndexingService indexingService;
+    private final SearchingService searchingService;
     private boolean isIndexingInProgress = false;
     @Autowired
 
-    public ApiController(StatisticsService statisticsService, IndexingService indexingService) {
+    public ApiController(StatisticsService statisticsService, IndexingService indexingService, SearchingService searchingService) {
         this.statisticsService = statisticsService;
         this.indexingService = indexingService;
+        this.searchingService = searchingService;
     }
 
     @GetMapping("/statistics")
@@ -73,6 +79,32 @@ public class ApiController {
             response.put("result", false);
             response.put("error", "Данная страница находится за пределами сайтов, указанных в конфигурационном файле");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    @GetMapping("/search")
+    public ResponseEntity<Map<String, Object>> searchPages(String query, String site, int offset, int limit) {
+        Map<String, Object> response = new HashMap<>();
+        if (query.equals("")) {
+            response.put("result", false);
+            response.put("error", "Задан пустой поисковый запрос");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        } else {
+            response.put("result", true);
+
+            List<ResponseResults> responseResults;
+            try {
+                if (site == null) {
+                    responseResults = searchingService.searchPagesOnAllSites(query);
+                } else {
+                    responseResults = searchingService.searchPagesOnOneSite(query, site);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            response.put("count", responseResults.size());
+            response.put("data", responseResults);
+
+            return ResponseEntity.status(HttpStatus.OK).body(response);
         }
     }
 }

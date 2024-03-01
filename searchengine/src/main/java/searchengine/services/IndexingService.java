@@ -49,7 +49,6 @@ public class IndexingService {
                         if (siteRepository.existsByUrl(site.getUrl())) {
                             siteRepository.delete(siteRepository.findByUrl(site.getUrl()));
                         }
-
                         siteIndex.setUrl(site.getUrl());
                         siteIndex.setName(site.getName());
                         siteIndex.setStatusEnum(Status.INDEXING);
@@ -89,8 +88,6 @@ public class IndexingService {
                 lemmaRepository.deleteLemmasByPageId(deletePage.getId());
                 pageRepository.delete(deletePage);
             }
-
-
             Page examplePage = new Page();
             examplePage.setPath(href);
             Example<Page> example = Example.of(examplePage);
@@ -127,7 +124,6 @@ public class IndexingService {
                 }
             }
         }
-
     }
     public boolean indexPage(String url){
         String baseUrl = "";
@@ -173,7 +169,6 @@ public class IndexingService {
                     if (response.statusCode() != 200) {
                         continue;
                     }
-
                     page.setCode(responseCode);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
@@ -221,9 +216,8 @@ public class IndexingService {
                 index.setRank(count);
                 lemmaRepository.save(newLemma);
                 indexRepository.save(index);
-            };
+            }
         });
-
     }
     private void shutdown(SiteIndex site) {
         forkJoinPool.shutdown();
@@ -235,8 +229,6 @@ public class IndexingService {
             Thread.currentThread().interrupt();
         }
     }
-
-
     public void stopIndexing() {
         forkJoinPool.execute(() ->
             stopIndex = true);
@@ -247,5 +239,4 @@ public class IndexingService {
         site.setLastError("Индексация остановлена пользователем");
         siteRepository.save(site);
     }
-
 }
