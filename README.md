@@ -2,7 +2,7 @@
 <h2>Локальный поисковый движок по сайту </h2>
 <h3>Использованы техологии</h3>
 <hr/>
-Java 17, Spring boot, hibernate, liquibase, mysql, Spring data jpa, Apache lucene morphology, jsoup
+Java 17, Spring boot, hibernate, liquibase, mysql, Spring data jpa, Apache lucene morphology, jsoup, maven
 
 <h3>Описание проекта</h3>
 <hr/>
