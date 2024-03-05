@@ -1,5 +1,4 @@
 package searchengine.services;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
@@ -8,6 +7,8 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.data.domain.Example;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
@@ -16,37 +17,54 @@ import searchengine.repositories.IndexRepository;
 import searchengine.repositories.LemmaRepository;
 import searchengine.repositories.PageRepository;
 import searchengine.repositories.SiteRepository;
-
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.TimeUnit;
+
 
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class IndexingService {
-    private ForkJoinPool forkJoinPool = new ForkJoinPool();
+    private ForkJoinPool forkJoinPool;
     private final SitesList sites;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
     private boolean stopIndex = false;
-
-    public void startIndexing() {
-        indexSites();
+    private boolean isIndexingInProgress = false;
+    public ResponseEntity<Map<String, Object>> startIndexing() {
+        forkJoinPool = new ForkJoinPool();
+        Map<String, Object> response = new HashMap<>();
+        if (isIndexingInProgress) {
+            response.put("result", false);
+            response.put("error", "Индексация уже запущена");
+            return ResponseEntity.badRequest().body(response);
+        } else {
+            indexSites();
+            isIndexingInProgress = true;
+            response.put("result", true);
+            return ResponseEntity.ok().body(response);
+            }
     }
-    public void indexSites() {
+    private void indexSites() {
             List<Site> sitesList = sites.getSites();
             for (Site site : sitesList) {
                 SiteIndex siteIndex = new SiteIndex();
                 forkJoinPool.execute(() -> {
                     try {
                         if (siteRepository.existsByUrl(site.getUrl())) {
+                            List<Page> existingPages = pageRepository.findAllBySiteId(siteRepository.findByUrl(site.getUrl()));
+                            existingPages.forEach(page -> {
+                                indexRepository.deleteByPageId(page.getId());
+                                lemmaRepository.deleteLemmasByPageId(page.getId());
+                                pageRepository.delete(page);
+                            });
                             siteRepository.delete(siteRepository.findByUrl(site.getUrl()));
                         }
                         siteIndex.setUrl(site.getUrl());
@@ -75,7 +93,6 @@ public class IndexingService {
             }
     }
     private void indexPages(Elements links, SiteIndex siteIndex) {
-
         for (Element link : links) {
             siteIndex.setStatusTime(LocalDateTime.now());
             siteRepository.save(siteIndex);
@@ -101,7 +118,6 @@ public class IndexingService {
                             .get();
                     Connection.Response response = Jsoup.connect(link.absUrl("href")).execute();
                     int responseCode = response.statusCode();
-
                     page.setCode(responseCode);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -113,7 +129,6 @@ public class IndexingService {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-
                 if(link.equals(links.last())) {
                     shutdown(siteIndex);
                     return;
@@ -123,6 +138,19 @@ public class IndexingService {
                     return;
                 }
             }
+        }
+    }
+    public ResponseEntity<Map<String, Object>> startIndexPage(String url) {
+        Map<String, Object> response = new HashMap<>();
+        String subUrl = url.substring(4);
+        boolean isSuccess = indexPage(subUrl);
+        if (isSuccess) {
+            response.put("result", true);
+            return ResponseEntity.ok().body(response);
+        } else {
+            response.put("result", false);
+            response.put("error", "Данная страница находится за пределами сайтов, указанных в конфигурационном файле");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
     public boolean indexPage(String url){
@@ -192,7 +220,6 @@ public class IndexingService {
         LemmaFinder finder = LemmaFinder.getInstance();
         Map<String, Integer> lemmaMap = finder.collectLemmas(content);
         lemmaMap.forEach((lemma, count) -> {
-
             if(lemmaRepository.existsByLemma(lemma)) {
             Lemma foundLemma = lemmaRepository.findbyLemma(lemma);
             Index index = new Index();
@@ -223,15 +250,20 @@ public class IndexingService {
         forkJoinPool.shutdown();
         site.setStatusEnum(Status.INDEXED);
         siteRepository.save(site);
-        try {
-            forkJoinPool.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
-    public void stopIndexing() {
+    public ResponseEntity<Map<String, Object>> stopIndexing() {
+        Map<String, Object> response = new HashMap<>();
+        if (!isIndexingInProgress) {
+            response.put("result", false);
+            response.put("error", "Индексация не запущена");
+            return ResponseEntity.badRequest().body(response);
+        }
         forkJoinPool.execute(() ->
-            stopIndex = true);
+                stopIndex = true);
+        isIndexingInProgress = false;
+        response.put("result", true);
+        return ResponseEntity.ok().body(response);
+
     }
     private void shutdownNow(SiteIndex site) {
         forkJoinPool.shutdownNow();
