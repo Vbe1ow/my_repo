@@ -52,45 +52,49 @@ public class IndexingService {
             return ResponseEntity.ok().body(response);
             }
     }
+
     private void indexSites() {
-            List<Site> sitesList = sites.getSites();
-            for (Site site : sitesList) {
-                SiteIndex siteIndex = new SiteIndex();
-                forkJoinPool.execute(() -> {
-                    try {
-                        if (siteRepository.existsByUrl(site.getUrl())) {
-                            List<Page> existingPages = pageRepository.findAllBySiteId(siteRepository.findByUrl(site.getUrl()));
-                            existingPages.forEach(page -> {
-                                indexRepository.deleteByPageId(page.getId());
-                                lemmaRepository.deleteLemmasByPageId(page.getId());
-                                pageRepository.delete(page);
-                            });
-                            siteRepository.delete(siteRepository.findByUrl(site.getUrl()));
-                        }
-                        siteIndex.setUrl(site.getUrl());
-                        siteIndex.setName(site.getName());
-                        siteIndex.setStatusEnum(Status.INDEXING);
-                        Document doc = Jsoup.connect(site.getUrl())
-                                .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                                .referrer("http://www.google.com")
-                                .get();
-                        siteRepository.save(siteIndex);
-                        Elements links = doc.select("a[href]");
-                        Elements filteredLinks = new Elements();
-                        for (Element link : links) {
-                            String href = link.attr("href");
-                            if (href.startsWith("/") & !href.equals("/")) {
-                                filteredLinks.add(link);
-                            }
-                        }
-                        indexPages(filteredLinks, siteIndex);
-                    } catch (Exception e) {
-                        siteIndex.setLastError("Error while indexing site: " + site.getUrl() + "; " + e);
-                        siteIndex.setStatusEnum(Status.FAILED);
-                        siteRepository.save(siteIndex);
+        stopIndex = false;
+        List<Site> sitesList = sites.getSites();
+        for (Site site : sitesList) {
+            SiteIndex siteIndex = new SiteIndex();
+            forkJoinPool.execute(() -> {
+                try {
+                    if (siteRepository.existsByUrl(site.getUrl())) {
+                        SiteIndex existingSite = siteRepository.findByUrl(site.getUrl());
+                        List<Page> existingPages = pageRepository.findAllBySiteId(existingSite);
+                        List<Lemma> existingLemmas = lemmaRepository.findAllBySiteId(existingSite);
+                        existingPages.forEach(page -> {
+                            indexRepository.deleteByPageId(page.getId());
+                            pageRepository.delete(page);
+                        });
+                        existingLemmas.forEach(lemma -> lemmaRepository.delete(lemma));
+                        siteRepository.delete(siteRepository.findByUrl(site.getUrl()));
                     }
-                });
-            }
+                    siteIndex.setUrl(site.getUrl());
+                    siteIndex.setName(site.getName());
+                    siteIndex.setStatusEnum(Status.INDEXING);
+                    Document doc = Jsoup.connect(site.getUrl())
+                            .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                            .referrer("http://www.google.com")
+                            .get();
+                    siteRepository.save(siteIndex);
+                    Elements links = doc.select("a[href]");
+                    Elements filteredLinks = new Elements();
+                    for (Element link : links) {
+                        String href = link.attr("href");
+                        if (href.startsWith("/") & !href.equals("/")) {
+                            filteredLinks.add(link);
+                        }
+                    }
+                    indexPages(filteredLinks, siteIndex);
+                } catch (Exception e) {
+                    siteIndex.setLastError("Error while indexing site: " + site.getUrl() + "; " + e);
+                    siteIndex.setStatusEnum(Status.FAILED);
+                    siteRepository.save(siteIndex);
+                }
+            });
+        }
     }
     private void indexPages(Elements links, SiteIndex siteIndex) {
         for (Element link : links) {

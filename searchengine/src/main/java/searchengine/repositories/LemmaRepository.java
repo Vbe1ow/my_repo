@@ -7,7 +7,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import searchengine.model.Lemma;
 import searchengine.model.SiteIndex;
-
 import javax.transaction.Transactional;
 import java.util.List;
 
